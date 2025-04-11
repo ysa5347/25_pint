@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+//#include "lib/kernel/list.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -71,6 +72,10 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+// ==the list that manages sleeped thread.======
+static struct list sleep_list;
+
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -88,7 +93,8 @@ void
 thread_init (void) 
 {
   ASSERT (intr_get_level () == INTR_OFF);
-
+  // ==sleep_list initialize===========
+  list_init (&sleep_list);
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
@@ -99,6 +105,61 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 }
+
+
+
+// == awake_tick_less =================
+bool
+awake_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *t_a = list_entry(a, struct thread, elem);
+	struct thread *t_b = list_entry(b, struct thread, elem);
+	return t_a->awake_tick < t_b->awake_tick;
+}
+
+
+// == thead_sleep =====================
+void
+thread_sleep (int64_t ticks)
+{
+	struct thread *cur = thread_current();
+	enum intr_level old_level;
+
+	ASSERT(cur != idle_thread);          // if thread == idle_thread => error
+
+	old_level = intr_disable();          // interupt off
+	cur->awake_tick = ticks;             // set wakeup time
+	
+	list_insert_ordered (&sleep_list, &cur->elem, awake_tick_less, NULL);
+	thread_block();
+
+	intr_set_level (old_level);          // interupt on
+}
+
+
+// == thread_awake ===================
+void
+thread_awake (int64_t ticks)
+{
+	struct list_elem *elem = list_begin(&sleep_list);
+
+	while(elem != list_end (&sleep_list)){
+		struct thread *t = list_entry (elem, struct thread, elem);
+		// thread -> ready state
+		if (t->awake_tick <= ticks){
+			elem = list_remove(elem);
+			thread_unblock(t);
+		}
+		// skip loof
+		else
+			break;
+	}
+}
+
+
+
+
+
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
@@ -223,8 +284,8 @@ thread_block (void)
 {
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
-  
-  thread_current()->status = THREAD_BLOCKED;
+
+  thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
 

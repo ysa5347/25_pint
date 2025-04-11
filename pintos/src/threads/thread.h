@@ -89,12 +89,12 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+    // == awake tick ===============
+    int64_t awake_tick;
+
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
-    /* set by timer.c */
-    int64_t wake_tick;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -104,6 +104,16 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+
+
+// == thead_sleep_awake =====================
+bool awake_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux);
+void thread_sleep(int64_t ticks);
+void thread_awake(int64_t ticks);
+
+
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
