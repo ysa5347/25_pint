@@ -92,9 +92,14 @@ struct thread
     // == awake tick ===============
     int64_t awake_tick;
 
+   // ==== priority ====
+   int ori_priority;
+   struct list donated_list;
+   struct lock *wait_lock;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list_elem donated_elem;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -145,6 +150,7 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+bool prior_comp_higher(const struct list_elem *A, const struct list_elem *B, void *aux UNUSED);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
