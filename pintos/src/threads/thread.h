@@ -150,7 +150,7 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
-bool prior_comp_higher(const struct list_elem *A, const struct list_elem *B, void *aux UNUSED);
+bool prior_comp_high(const struct list_elem *A, const struct list_elem *B, void *aux UNUSED);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

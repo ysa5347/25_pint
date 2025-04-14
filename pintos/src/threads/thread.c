@@ -152,7 +152,7 @@ thread_awake (int64_t ticks)
 		}
 		// skip loof
 		else
-			break;
+			elem = list_next(elem);
 	}
 }
 
@@ -413,8 +413,18 @@ thread_set_priority (int new_priority)
   curr->ori_priority = new_priority;
 
   /* ==== none donated priority OR new_priority > current priority ====*/
-  if(list_empty(&curr->donated_list) || new_priority > curr->priority)
+  if(list_empty(&curr->donated_list)){
     curr->priority = new_priority;
+  }
+  else{
+    list_sort(&curr->donated_list, prior_comp_high, NULL);
+    struct thread *high = list_entry(list_front(&curr->donated_list), struct thread, donated_elem);
+
+    if(new_priority > high->priority)
+      curr->priority = new_priority;
+    else
+      curr->priority = high->priority;
+  }
   /* ==== if the priority decreased, check higher priority threads from ready_list ====*/
   if(!list_empty(&ready_list) && curr->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority)
     thread_yield();
