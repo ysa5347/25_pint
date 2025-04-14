@@ -147,10 +147,12 @@ thread_awake (int64_t ticks)
 		struct thread *t = list_entry (elem, struct thread, elem);
 		// thread -> ready state
 		if (t->awake_tick <= ticks){
-			elem = list_remove(elem);
+			struct list_elem *next_elem = list_next(elem);
+			list_remove(elem);
 			thread_unblock(t);
+			elem = next_elem;
 		}
-		// skip loof
+		// skip loop
 		else
 			elem = list_next(elem);
 	}

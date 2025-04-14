@@ -222,17 +222,15 @@ lock_acquire (struct lock *lock)
   if(lock->holder != NULL){
     curr->wait_lock = lock;
     hold = lock->holder;
-
     list_insert_ordered(&hold->donated_list, &curr->donated_elem, prior_comp_high, NULL);
-
+    
     if(curr->priority > hold->priority){
       hold->priority = curr->priority;
-
+      
       while(hold->wait_lock != NULL && hold->wait_lock->holder != NULL){
         hold = hold->wait_lock->holder;
         if(hold->priority >= curr->priority)
           break;
-        list_insert_ordered(&hold->donated_list, &curr->donated_elem, prior_comp_high, NULL);
         hold->priority = curr->priority;
       }
     }
@@ -281,13 +279,15 @@ lock_release (struct lock *lock)
   struct thread *curr = thread_current();
   
   /* ==== pop threads waiting this lock from donation list. ====*/
-  struct list_elem *element = list_begin(&curr->donated_list);
-  while(element != list_end(&curr->donated_list)){
-    struct thread *t = list_entry(element, struct thread, donated_elem);
-    if(t->wait_lock == lock)
-      element = list_remove(element);
-    else
-      element = list_next(element);
+  if (!list_empty(&curr->donated_list)) {
+    struct list_elem *element = list_begin(&curr->donated_list);
+    while(element != list_end(&curr->donated_list)){
+      struct thread *t = list_entry(element, struct thread, donated_elem);
+      if(t->wait_lock == lock)
+        element = list_remove(element);
+      else
+        element = list_next(element);
+    }
   }
 
   curr->priority = curr->ori_priority;
