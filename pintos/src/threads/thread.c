@@ -422,15 +422,11 @@ thread_foreach (thread_action_func *func, void *aux)
 
 // [Testing] Whether the current thread has the highest priority ============
 void
-test_max_priority(void){
-  if (list_empty(&ready_list))
-    return;
-  
-  struct list_elem *e = list_begin(&ready_list);
-  struct thread *t = list_entry(e, struct thread, elem);
-
-  if (thread_get_priority() < t->priority)
-    thread_yield();
+test_max_priority(void)
+{
+  if (!list_empty (&ready_list) && 
+  thread_get_priority() < list_entry (list_begin (&ready_list), struct thread, elem)->priority)
+      thread_yield ();
 }
 
 
@@ -458,10 +454,12 @@ donate_priority (void)
   struct thread *cur = thread_current ();
 
   for (depth = 0; depth < 8; depth++){
-    if (!cur->wait_on_lock) break;
-      struct thread *holder = cur->wait_on_lock->holder;
-      holder->priority = cur->priority;
-      cur = holder;
+    if (!cur->wait_on_lock){
+      break;
+    }
+    struct thread *holder = cur->wait_on_lock->holder;
+    holder->priority = cur->priority;
+    cur = holder;
   }
 }
 

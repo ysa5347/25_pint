@@ -120,7 +120,7 @@ sema_up (struct semaphore *sema)
                                 struct thread, elem));
   }
   sema->value++;
-  //test_max_priority();
+  test_max_priority();
   intr_set_level (old_level);
 }
 
@@ -213,8 +213,7 @@ lock_acquire (struct lock *lock)
   struct thread *cur = thread_current ();
   if (lock->holder) {
     cur->wait_on_lock = lock;
-    list_insert_ordered(&lock->holder->donations, &cur->donation_elem, 
-    compare_donate_priority, 0);
+    list_insert_ordered(&lock->holder->donations, &cur->donation_elem, compare_donate_priority, 0);
     donate_priority();
   }
 
