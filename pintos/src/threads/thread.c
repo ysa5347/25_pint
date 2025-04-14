@@ -275,6 +275,8 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  /* threads/thread.c thread_create() */
+  test_max_priority(); //compare between current and unblocked thread
   return tid;
 }
 
@@ -308,7 +310,7 @@ bool
 compare_priority_high(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
 	struct thread *t_a = list_entry(a, struct thread, elem);
 	struct thread *t_b = list_entry(b, struct thread, elem);
-	return t_a->awake_tick > t_b->awake_tick;
+	return t_a->priority > t_b->priority;
 }
 
 // == ready queue(FIFO)  ->  sorted_list ======
@@ -325,8 +327,6 @@ thread_unblock (struct thread *t)
   list_insert_ordered(&ready_list, &t->elem, compare_priority_high, NULL); 
   t->status = THREAD_READY;
   intr_set_level (old_level);
-
-  test_max_priority(); //compare between current and unblocked thread
 }
 
 /* Returns the name of the running thread. */
@@ -439,6 +439,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  refresh_priority();
   test_max_priority();
 }
 
@@ -448,6 +449,52 @@ thread_get_priority (void)
 {
   return thread_current ()->priority;
 }
+
+// == assignment2 (priority donation) ==============
+void
+donate_priority (void)
+{
+  int depth;
+  struct thread *cur = thread_current ();
+
+  for (depth = 0; depth < 8; depth++){
+    if (!cur->wait_on_lock) break;
+      struct thread *holder = cur->wait_on_lock->holder;
+      holder->priority = cur->priority;
+      cur = holder;
+  }
+}
+
+void
+remove_with_lock (struct lock *lock)
+{
+  struct list_elem *e;
+  struct thread *cur = thread_current ();
+
+  for (e = list_begin (&cur->donations); e != list_end (&cur->donations); e = list_next (e)){
+    struct thread *t = list_entry (e, struct thread, donation_elem);
+    if (t->wait_on_lock == lock)
+      list_remove (&t->donation_elem);
+  }
+}
+
+void
+refresh_priority (void)
+{
+  struct thread *cur = thread_current ();
+
+  cur->priority = cur->init_priority;
+  
+  if (!list_empty (&cur->donations)) {
+    list_sort (&cur->donations, compare_donate_priority, 0);
+
+    struct thread *front = list_entry (list_front (&cur->donations), struct thread, donation_elem);
+    if (front->priority > cur->priority)
+      cur->priority = front->priority;
+  }
+}
+
+
 
 /* Sets the current thread's nice value to NICE. */
 void
@@ -565,6 +612,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  // == assignment2 (priority donation) =======
+  t->init_priority=priority;
+  t->wait_on_lock=NULL;
+  list_init(&t->donations);
+
   list_push_back (&all_list, &t->allelem);
 }
 

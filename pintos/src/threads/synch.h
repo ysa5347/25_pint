@@ -4,6 +4,10 @@
 #include <list.h>
 #include <stdbool.h>
 
+// == assignment2 =============================================
+bool compare_sema_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+bool compare_donate_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+
 /* A counting semaphore. */
 struct semaphore 
   {

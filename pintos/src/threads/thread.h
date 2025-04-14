@@ -91,6 +91,11 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     // == awake tick ===============
     int64_t awake_tick;
+    // == assignment2(priority donation) =====
+    int init_priority;
+    struct lock *wait_on_lock;
+    struct list donations;
+    struct list_elem donation_elem;
 
 
     /* Shared between thread.c and synch.c. */
@@ -107,11 +112,17 @@ struct thread
 
 
 
-// == thead_sleep_awake =====================
-bool awake_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux);
 void thread_sleep(int64_t ticks);
 void thread_awake(int64_t ticks);
 
+// == assignment 1 =============================
+bool compare_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux);
+// == assignment 2 =============================
+bool compare_priority_high(const struct list_elem *a, const struct list_elem *b, void *aux);
+void test_max_priority(void);
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
 
 
 
