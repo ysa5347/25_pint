@@ -168,6 +168,13 @@ sema_test_helper (void *sema_)
       sema_up (&sema[1]);
     }
 }
+
+bool sema_prior_comp_high(const struct list_elem *A, const struct list_elem *B, void *aux UNUSED){
+  struct semaphore_elem *sema_A = list_entry(A, struct semaphore_elem, elem);
+  struct semaphore_elem *sema_B = list_entry(B, struct semaphore_elem, elem);
+
+  return sema_A->thread->priority > sema_B->thread->priority;
+}
 
 /* Initializes LOCK.  A lock can be held by at most a single
    thread at any given time.  Our locks are not "recursive", that
@@ -205,7 +212,6 @@ void
 lock_acquire (struct lock *lock)
 {
   struct thread *curr = thread_current();
-  struct lock *l;
   struct thread *hold;
 
   ASSERT (lock != NULL);
@@ -217,6 +223,8 @@ lock_acquire (struct lock *lock)
     curr->wait_lock = lock;
     hold = lock->holder;
 
+    list_insert_ordered(&hold->donated_list, &curr->donated_elem, prior_comp_high, NULL);
+
     if(curr->priority > hold->priority){
       hold->priority = curr->priority;
 
@@ -224,6 +232,7 @@ lock_acquire (struct lock *lock)
         hold = hold->wait_lock->holder;
         if(hold->priority >= curr->priority)
           break;
+        list_insert_ordered(&hold->donated_list, &curr->donated_elem, prior_comp_high, NULL);
         hold->priority = curr->priority;
       }
     }
@@ -234,6 +243,8 @@ lock_acquire (struct lock *lock)
   curr->wait_lock = NULL;
   lock->holder = thread_current ();
 }
+
+
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -268,14 +279,24 @@ lock_release (struct lock *lock)
 
   /* ==== prior restore and increase prior who donated ==== */
   struct thread *curr = thread_current();
+  
+  /* ==== pop threads waiting this lock from donation list. ====*/
+  struct list_elem *element = list_begin(&curr->donated_list);
+  while(element != list_end(&curr->donated_list)){
+    struct thread *t = list_entry(element, struct thread, donated_elem);
+    if(t->wait_lock == lock)
+      element = list_remove(element);
+    else
+      element = list_next(element);
+  }
 
   curr->priority = curr->ori_priority;
 
   if(!list_empty(&curr->donated_list)){
     list_sort(&curr->donated_list, prior_comp_high, NULL);
-    struct thread *H = list_entry(list_front(&curr->donated_list), struct thread, donated_elem);
-    if(H->priority > curr->priority)
-      curr->priority = H->priority;
+    struct thread *high = list_entry(list_front(&curr->donated_list), struct thread, donated_elem);
+    if(high->priority > curr->priority)
+      curr->priority = high->priority;
   }
 
   lock->holder = NULL;
@@ -294,11 +315,7 @@ lock_held_by_current_thread (const struct lock *lock)
 }
 
 /* One semaphore in a list. */
-struct semaphore_elem 
-  {
-    struct list_elem elem;              /* List element. */
-    struct semaphore semaphore;         /* This semaphore. */
-  };
+
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -342,7 +359,8 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_insert_ordered(&cond->waiters, &waiter.elem, prior_comp_high, NULL);
+  waiter.thread = thread_current();
+  list_insert_ordered(&cond->waiters, &waiter.elem, sema_prior_comp_high, NULL);
   // list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
