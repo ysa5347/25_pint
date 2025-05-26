@@ -97,17 +97,22 @@ struct thread
    struct list donated_list;
    struct lock *wait_lock;
 
-    /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
-    struct list_elem donated_elem;
+   /* Shared between thread.c and synch.c. */
+   struct list_elem elem;              /* List element. */
+   struct list_elem donated_elem;
 
 #ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
+   /* Owned by userprog/process.c. */
+   uint32_t *pagedir;                  /* Page directory. */
+   
+   /* For Problem 1: Process termination */
+   char process_name[16];              /* Process name without arguments */
+   int exit_status;                    /* Exit status of the process */
+   bool is_user_process;               /* Flag to indicate if it's user process */
 #endif
 
-    /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
+   /* Owned by thread.c. */
+   unsigned magic;                     /* Detects stack overflow. */
   };
 
 

@@ -559,6 +559,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->wait_lock = NULL;
   list_init(&t->donated_list);
   t->magic = THREAD_MAGIC;
+
+#ifdef USERPROG
+  /* Initialize new fields for Problem 1 */
+  t->exit_status = 0;
+  t->is_user_process = false;
+  memset (t->process_name, 0, sizeof t->process_name);
+#endif
+
   list_push_back (&all_list, &t->allelem);
 }
 
