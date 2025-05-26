@@ -227,6 +227,7 @@ push_arguments (const char *cmd_line, void **esp)
   char *args[128];  /* Maximum 128 arguments */
   int argc = 0;
   char *token, *save_ptr;
+  int i;
   
   /* Make a copy for parsing */
   char *cmd_copy = palloc_get_page (0);
@@ -246,7 +247,7 @@ push_arguments (const char *cmd_line, void **esp)
   int *argv[128];
   
   /* Push argument strings */
-  for (int i = argc - 1; i >= 0; i--)
+  for (i = argc - 1; i >= 0; i--)
     {
       size_t len = strlen (args[i]) + 1;
       *esp -= len;
@@ -262,7 +263,7 @@ push_arguments (const char *cmd_line, void **esp)
   *((char **) *esp) = NULL;
   
   /* Push argument pointers */
-  for (int i = argc - 1; i >= 0; i--)
+  for (i = argc - 1; i >= 0; i--)
     {
       *esp -= sizeof (char *);
       *((char **) *esp) = (char *) argv[i];

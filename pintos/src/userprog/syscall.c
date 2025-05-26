@@ -29,11 +29,12 @@ get_user (const uint8_t *uaddr)
 static int
 get_user_word (const uint32_t *uaddr)
 {
+  int i;
   if (!is_user_vaddr (uaddr))
     return -1;
   
   /* Check all 4 bytes are valid */
-  for (int i = 0; i < 4; i++)
+  for (i = 0; i < 4; i++)
     {
       if (get_user ((uint8_t *)uaddr + i) == -1)
         return -1;
