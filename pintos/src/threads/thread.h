@@ -101,16 +101,15 @@ struct thread
     struct list_elem elem;              /* List element. */
     struct list_elem donated_elem;
 
-#ifdef USERPROG
+   #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-#endif
+    int exit_status;                    /* Exit status for process termination messages */
+   #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-
-
 
 // == thead_sleep_awake =====================
 bool awake_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux);

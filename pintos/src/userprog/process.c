@@ -53,6 +53,9 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  struct thread *cur = thread_current();
+
+  cur->exit_status = -1;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -100,6 +103,11 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  
+  if(cur->pagedir != NULL){
+    printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+  }
+  
   pd = cur->pagedir;
   if (pd != NULL) 
     {

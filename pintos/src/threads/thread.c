@@ -559,6 +559,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->wait_lock = NULL;
   list_init(&t->donated_list);
   t->magic = THREAD_MAGIC;
+
+  #ifdef USERPROG
+  t->exit_status = 0; /* Default success exit status. */
+  #endif
+  
   list_push_back (&all_list, &t->allelem);
 }
 
