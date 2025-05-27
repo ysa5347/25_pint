@@ -241,6 +241,12 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  
+  #ifdef USERPROG
+  /* Set up parent-child relationship */
+  t->parent = thread_current();
+  list_push_back(&thread_current()->children, &t->child_elem);
+  #endif
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -562,6 +568,15 @@ init_thread (struct thread *t, const char *name, int priority)
 
   #ifdef USERPROG
   t->exit_status = 0; /* Default success exit status. */
+  t->parent = NULL;
+  list_init(&t->children);
+  sema_init(&t->child_lock, 0);
+  sema_init(&t->memory_lock, 0);
+  sema_init(&t->load_lock, 0);
+  t->exit_code = 0;
+  int i;
+  for (i = 0; i < 128; i++)
+    t->fd[i] = NULL;
   #endif
   
   list_push_back (&all_list, &t->allelem);

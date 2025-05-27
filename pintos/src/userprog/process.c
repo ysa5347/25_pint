@@ -33,6 +33,7 @@ process_execute (const char *file_name)
   char *program_name;
   char *save_ptr;
   tid_t tid;
+  struct thread *current = thread_current();
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -53,7 +54,31 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy);
+    {
+      palloc_free_page (fn_copy);
+      palloc_free_page(program_name);
+      return TID_ERROR;
+    }
+  
+  /* Wait for child process to load */
+  sema_down (&current->load_lock);
+  
+  /* Check if child process loaded successfully */
+  struct list_elem *e;
+  for (e = list_begin (&current->children); e != list_end (&current->children); e = list_next (e))
+    {
+      struct thread *child = list_entry (e, struct thread, child_elem);
+      if (child->tid == tid)
+        {
+          if (child->exit_code == -1)
+            {
+              palloc_free_page(program_name);
+              return -1;
+            }
+          break;
+        }
+    }
+  
   palloc_free_page(program_name); 
   return tid;
 }
@@ -68,7 +93,7 @@ start_process (void *file_name_)
   bool success;
   struct thread *cur = thread_current();
 
-  cur->exit_status = -1;
+  cur->exit_code = -1;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -79,8 +104,15 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+  
+  /* Signal parent process that loading is done */
+  if (cur->parent)
+    sema_up (&cur->parent->load_lock);
+  
   if (!success) 
     thread_exit ();
+  else
+    cur->exit_code = 0; /* Load successful */
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -102,9 +134,41 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+  struct thread *current = thread_current();
+  struct list_elem *e;
+  struct thread *child = NULL;
+  int exit_code;
+  
+  /* Find the child thread */
+  for (e = list_begin (&current->children); e != list_end (&current->children); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, child_elem);
+      if (t->tid == child_tid)
+        {
+          child = t;
+          break;
+        }
+    }
+  
+  /* If child not found or not a direct child, return -1 */
+  if (child == NULL)
+    return -1;
+  
+  /* Remove from children list to prevent double-waiting */
+  list_remove (&child->child_elem);
+    
+  /* Wait for child to exit */
+  sema_down (&child->child_lock);
+  
+  /* Get exit code */
+  exit_code = child->exit_code;
+  
+  /* Allow child's memory to be freed */
+  sema_up (&child->memory_lock);
+  
+  return exit_code;
 }
 
 /* Free the current process's resources. */
@@ -113,14 +177,26 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  int i;
+
+  /* Print exit message only for user processes, not for halt system call */
+  if (cur->pagedir != NULL && cur->exit_code != -2)
+    {
+      printf("%s: exit(%d)\n", cur->name, cur->exit_code);
+    }
+  
+  /* Close all open files */
+  for (i = 3; i < 128; i++)
+    {
+      if (cur->fd[i] != NULL)
+        {
+          file_close(cur->fd[i]);
+          cur->fd[i] = NULL;
+        }
+    }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  
-  if(cur->pagedir != NULL){
-      printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-    }
-  
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -135,6 +211,13 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+    
+  /* Signal parent that this process is exiting */
+  sema_up (&cur->child_lock);
+  
+  /* Wait for parent to read exit code before memory cleanup (only if parent exists) */
+  if (cur->parent != NULL)
+    sema_down (&cur->memory_lock);
 }
 
 /* Sets up the CPU for running user code in the current
