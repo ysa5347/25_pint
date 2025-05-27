@@ -51,7 +51,7 @@ process_execute (const char *file_name)
   program_name = strtok_r (program_name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   palloc_free_page(program_name); 
@@ -118,8 +118,8 @@ process_exit (void)
      to the kernel-only page directory. */
   
   if(cur->pagedir != NULL){
-    printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-  }
+      printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+    }
   
   pd = cur->pagedir;
   if (pd != NULL) 
@@ -241,6 +241,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Parse the command line to extract program name and arguments */
   fn_copy = malloc (strlen (file_name) + 1);
+  if (fn_copy == NULL)
+    goto done;
   strlcpy (fn_copy, file_name, strlen (file_name) + 1);
   program_name = strtok_r (fn_copy, " ", &save_ptr);
 
@@ -456,83 +458,89 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-   static bool
-   setup_stack (void **esp, const char *file_name) 
-   {
-     uint8_t *kpage;
-     bool success = false;
-     char *fn_copy;
-     char *token, *save_ptr;
-     char *argv[128];  /* Assume max 128 arguments */
-     int argc = 0;
-     int i;
-   
-     kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-     if (kpage != NULL) 
-       {
-         success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-         if (success)
-           {
-             *esp = PHYS_BASE;
-             
-             /* Parse arguments */
-             fn_copy = malloc (strlen (file_name) + 1);
-             strlcpy (fn_copy, file_name, strlen (file_name) + 1);
-             
-             for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
-                  token = strtok_r (NULL, " ", &save_ptr))
-               {
-                 argv[argc] = token;
-                 argc++;
-                 if (argc >= 128) break;  /* Prevent overflow */
-               }
-             
-             /* Push arguments onto stack in reverse order */
-             for (i = argc - 1; i >= 0; i--)
-               {
-                 *esp -= strlen (argv[i]) + 1;
-                 memcpy (*esp, argv[i], strlen (argv[i]) + 1);
-                 argv[i] = (char *) *esp;  /* Save address for argv array */
-               }
-             
-             /* Word-align stack pointer */
-             while ((uintptr_t) *esp % 4 != 0)
-               {
-                 *esp -= 1;
-                 *(char *) *esp = 0;
-               }
-             
-             /* Push null pointer sentinel */
-             *esp -= sizeof (char *);
-             *(char **) *esp = NULL;
-             
-             /* Push addresses of arguments */
-             for (i = argc - 1; i >= 0; i--)
-               {
-                 *esp -= sizeof (char *);
-                 *(char **) *esp = argv[i];
-               }
-             
-             /* Push argv */
-             char **argv_ptr = (char **) *esp;
-             *esp -= sizeof (char **);
-             *(char ***) *esp = argv_ptr;
-             
-             /* Push argc */
-             *esp -= sizeof (int);
-             *(int *) *esp = argc;
-             
-             /* Push fake return address */
-             *esp -= sizeof (void *);
-             *(void **) *esp = NULL;
-             
-             free (fn_copy);
-           }
-         else
-           palloc_free_page (kpage);
-       }
-     return success;
-   }
+static bool
+setup_stack (void **esp, const char *file_name) 
+{
+  uint8_t *kpage;
+  bool success = false;
+  char *fn_copy;
+  char *token, *save_ptr;
+  char *argv[128];  /* Assume max 128 arguments */
+  int argc = 0;
+  int i;
+
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage != NULL) 
+    {
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      if (success)
+        {
+          *esp = PHYS_BASE;
+          
+          /* Parse arguments */
+          fn_copy = malloc (strlen (file_name) + 1);
+          if (fn_copy == NULL)
+            {
+              palloc_free_page (kpage);
+              return false;
+            }
+          strlcpy (fn_copy, file_name, strlen (file_name) + 1);
+          
+          /* Count arguments and store them */
+          for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
+               token = strtok_r (NULL, " ", &save_ptr))
+            {
+              argv[argc] = token;
+              argc++;
+              if (argc >= 128) break;  /* Prevent overflow */
+            }
+          
+          /* Push arguments onto stack in reverse order */
+          for (i = argc - 1; i >= 0; i--)
+            {
+              *esp -= strlen (argv[i]) + 1;
+              memcpy (*esp, argv[i], strlen (argv[i]) + 1);
+              argv[i] = (char *) *esp;  /* Save address for argv array */
+            }
+          
+          /* Word-align stack pointer */
+          while ((uintptr_t) *esp % 4 != 0)
+            {
+              *esp -= 1;
+              *(char *) *esp = 0;
+            }
+          
+          /* Push null pointer sentinel */
+          *esp -= sizeof (char *);
+          *(char **) *esp = NULL;
+          
+          /* Push addresses of arguments */
+          for (i = argc - 1; i >= 0; i--)
+            {
+              *esp -= sizeof (char *);
+              *(char **) *esp = argv[i];
+            }
+          
+          /* Push argv */
+          char **argv_ptr = (char **) *esp;
+          *esp -= sizeof (char **);
+          *(char ***) *esp = argv_ptr;
+          
+          /* Push argc */
+          *esp -= sizeof (int);
+          *(int *) *esp = argc;
+          
+          /* Push fake return address */
+          *esp -= sizeof (void *);
+          *(void **) *esp = NULL;
+          
+          free (fn_copy);
+        }
+      else
+        palloc_free_page (kpage);
+    }
+  return success;
+}
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
