@@ -35,33 +35,46 @@ process_execute (const char *file_name)
   tid_t tid;
   struct thread *current = thread_current();
 
+  printf("[DEBUG] process_execute: file_name = %s\n", file_name);
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
-    return TID_ERROR;
+    {
+      printf("[DEBUG] process_execute: palloc_get_page failed for fn_copy\n");
+      return TID_ERROR;
+    }
   strlcpy (fn_copy, file_name, PGSIZE);
 
   program_name = palloc_get_page (0);
   if (program_name == NULL) 
     {
+      printf("[DEBUG] process_execute: palloc_get_page failed for program_name\n");
       palloc_free_page (fn_copy);
       return TID_ERROR;
     }
   strlcpy (program_name, file_name, PGSIZE);
   program_name = strtok_r (program_name, " ", &save_ptr);
 
+  printf("[DEBUG] process_execute: program_name = %s\n", program_name);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
+  printf("[DEBUG] process_execute: thread_create returned tid = %d\n", tid);
+  
   if (tid == TID_ERROR)
     {
+      printf("[DEBUG] process_execute: thread_create failed\n");
       palloc_free_page (fn_copy);
       palloc_free_page(program_name);
       return TID_ERROR;
     }
   
   /* Wait for child process to load */
+  printf("[DEBUG] process_execute: waiting for child to load...\n");
   sema_down (&current->load_lock);
+  printf("[DEBUG] process_execute: child load completed\n");
   
   /* Check if child process loaded successfully */
   struct list_elem *e;
@@ -70,8 +83,10 @@ process_execute (const char *file_name)
       struct thread *child = list_entry (e, struct thread, child_elem);
       if (child->tid == tid)
         {
+          printf("[DEBUG] process_execute: found child with tid %d, exit_code = %d\n", tid, child->exit_code);
           if (child->exit_code == -1)
             {
+              printf("[DEBUG] process_execute: child failed to load\n");
               palloc_free_page(program_name);
               return -1;
             }
@@ -80,6 +95,7 @@ process_execute (const char *file_name)
     }
   
   palloc_free_page(program_name); 
+  printf("[DEBUG] process_execute: returning tid = %d\n", tid);
   return tid;
 }
 
@@ -93,6 +109,8 @@ start_process (void *file_name_)
   bool success;
   struct thread *cur = thread_current();
 
+  printf("[DEBUG] start_process: started with file_name = %s, tid = %d\n", file_name, cur->tid);
+
   cur->exit_code = -1;
 
   /* Initialize interrupt frame and load executable. */
@@ -100,19 +118,36 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  
+  printf("[DEBUG] start_process: calling load()...\n");
   success = load (file_name, &if_.eip, &if_.esp);
+  printf("[DEBUG] start_process: load() returned %s\n", success ? "true" : "false");
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   
   /* Signal parent process that loading is done */
+  printf("[DEBUG] start_process: signaling parent about load completion\n");
   if (cur->parent)
-    sema_up (&cur->parent->load_lock);
+    {
+      printf("[DEBUG] start_process: parent exists, signaling load_lock\n");
+      sema_up (&cur->parent->load_lock);
+    }
+  else
+    {
+      printf("[DEBUG] start_process: no parent to signal\n");
+    }
   
   if (!success) 
-    thread_exit ();
+    {
+      printf("[DEBUG] start_process: load failed, exiting thread\n");
+      thread_exit ();
+    }
   else
-    cur->exit_code = 0; /* Load successful */
+    {
+      printf("[DEBUG] start_process: load successful, setting exit_code to 0\n");
+      cur->exit_code = 0; /* Load successful */
+    }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -120,6 +155,7 @@ start_process (void *file_name_)
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+  printf("[DEBUG] start_process: jumping to user code\n");
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
@@ -141,6 +177,8 @@ process_wait (tid_t child_tid)
   struct thread *child = NULL;
   int exit_code;
   
+  printf("[DEBUG] process_wait: waiting for child_tid = %d\n", child_tid);
+  
   /* Find the child thread */
   for (e = list_begin (&current->children); e != list_end (&current->children); e = list_next (e))
     {
@@ -148,26 +186,36 @@ process_wait (tid_t child_tid)
       if (t->tid == child_tid)
         {
           child = t;
+          printf("[DEBUG] process_wait: found child with tid %d\n", child_tid);
           break;
         }
     }
   
   /* If child not found or not a direct child, return -1 */
   if (child == NULL)
-    return -1;
+    {
+      printf("[DEBUG] process_wait: child not found, returning -1\n");
+      return -1;
+    }
   
   /* Remove from children list to prevent double-waiting */
+  printf("[DEBUG] process_wait: removing child from list\n");
   list_remove (&child->child_elem);
     
   /* Wait for child to exit */
+  printf("[DEBUG] process_wait: waiting for child to exit (sema_down)\n");
   sema_down (&child->child_lock);
+  printf("[DEBUG] process_wait: child exited\n");
   
   /* Get exit code */
   exit_code = child->exit_code;
+  printf("[DEBUG] process_wait: child exit_code = %d\n", exit_code);
   
   /* Allow child's memory to be freed */
+  printf("[DEBUG] process_wait: signaling memory_lock\n");
   sema_up (&child->memory_lock);
   
+  printf("[DEBUG] process_wait: returning %d\n", exit_code);
   return exit_code;
 }
 
@@ -179,6 +227,8 @@ process_exit (void)
   uint32_t *pd;
   int i;
 
+  printf("[DEBUG] process_exit: tid = %d, exit_code = %d\n", cur->tid, cur->exit_code);
+
   /* Print exit message only for user processes, not for halt system call */
   if (cur->pagedir != NULL && cur->exit_code != -2)
     {
@@ -186,6 +236,7 @@ process_exit (void)
     }
   
   /* Close all open files */
+  printf("[DEBUG] process_exit: closing files\n");
   for (i = 3; i < 128; i++)
     {
       if (cur->fd[i] != NULL)
@@ -197,6 +248,7 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  printf("[DEBUG] process_exit: destroying page directory\n");
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -213,11 +265,22 @@ process_exit (void)
     }
     
   /* Signal parent that this process is exiting */
+  printf("[DEBUG] process_exit: signaling child_lock\n");
   sema_up (&cur->child_lock);
   
   /* Wait for parent to read exit code before memory cleanup (only if parent exists) */
   if (cur->parent != NULL)
-    sema_down (&cur->memory_lock);
+    {
+      printf("[DEBUG] process_exit: waiting for parent to read exit code\n");
+      sema_down (&cur->memory_lock);
+      printf("[DEBUG] process_exit: parent read exit code, proceeding\n");
+    }
+  else
+    {
+      printf("[DEBUG] process_exit: no parent, skipping memory_lock wait\n");
+    }
+  
+  printf("[DEBUG] process_exit: finished\n");
 }
 
 /* Sets up the CPU for running user code in the current

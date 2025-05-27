@@ -246,6 +246,7 @@ thread_create (const char *name, int priority,
   /* Set up parent-child relationship */
   t->parent = thread_current();
   list_push_back(&thread_current()->children, &t->child_elem);
+  printf("[DEBUG] thread_create: child tid %d added to parent tid %d\n", t->tid, thread_current()->tid);
   #endif
 
   /* Prepare thread for first run by initializing its stack.

@@ -48,50 +48,61 @@ syscall_handler (struct intr_frame *f)
   check_user_vaddr (sp);
   
   int syscall_num = *(int*)sp;
+  printf("[DEBUG] syscall_handler: syscall_num = %d\n", syscall_num);
   
   switch (syscall_num)
   {
     case SYS_HALT:
+      printf("[DEBUG] SYS_HALT called\n");
       halt ();
       break;
       
     case SYS_EXIT:
       check_user_vaddr (sp + 4);
+      printf("[DEBUG] SYS_EXIT called with status = %d\n", *(int*)(sp + 4));
       exit (*(int*)(sp + 4));
       break;
       
     case SYS_EXEC:
       check_user_vaddr (sp + 4);
       check_user_vaddr (*(void**)(sp + 4));
+      printf("[DEBUG] SYS_EXEC called with cmd = %s\n", *(const char**)(sp + 4));
       f->eax = exec (*(const char**)(sp + 4));
+      printf("[DEBUG] SYS_EXEC returned = %d\n", f->eax);
       break;
       
     case SYS_WAIT:
       check_user_vaddr (sp + 4);
+      printf("[DEBUG] SYS_WAIT called with pid = %d\n", *(int*)(sp + 4));
       f->eax = wait (*(int*)(sp + 4));
+      printf("[DEBUG] SYS_WAIT returned = %d\n", f->eax);
       break;
       
     case SYS_CREATE:
       check_user_vaddr (sp + 4);
       check_user_vaddr (sp + 8);
       check_user_vaddr (*(void**)(sp + 4));
+      printf("[DEBUG] SYS_CREATE called\n");
       f->eax = create (*(const char**)(sp + 4), *(unsigned*)(sp + 8));
       break;
       
     case SYS_REMOVE:
       check_user_vaddr (sp + 4);
       check_user_vaddr (*(void**)(sp + 4));
+      printf("[DEBUG] SYS_REMOVE called\n");
       f->eax = remove (*(const char**)(sp + 4));
       break;
       
     case SYS_OPEN:
       check_user_vaddr (sp + 4);
       check_user_vaddr (*(void**)(sp + 4));
+      printf("[DEBUG] SYS_OPEN called\n");
       f->eax = open (*(const char**)(sp + 4));
       break;
       
     case SYS_FILESIZE:
       check_user_vaddr (sp + 4);
+      printf("[DEBUG] SYS_FILESIZE called\n");
       f->eax = filesize (*(int*)(sp + 4));
       break;
       
@@ -100,6 +111,7 @@ syscall_handler (struct intr_frame *f)
       check_user_vaddr (sp + 8);
       check_user_vaddr (sp + 12);
       check_user_vaddr (*(void**)(sp + 8));
+      printf("[DEBUG] SYS_READ called\n");
       f->eax = read (*(int*)(sp + 4), *(void**)(sp + 8), *(unsigned*)(sp + 12));
       break;
       
@@ -108,29 +120,35 @@ syscall_handler (struct intr_frame *f)
       check_user_vaddr (sp + 8);
       check_user_vaddr (sp + 12);
       check_user_vaddr (*(void**)(sp + 8));
+      printf("[DEBUG] SYS_WRITE called\n");
       f->eax = write (*(int*)(sp + 4), *(const void**)(sp + 8), *(unsigned*)(sp + 12));
       break;
       
     case SYS_SEEK:
       check_user_vaddr (sp + 4);
       check_user_vaddr (sp + 8);
+      printf("[DEBUG] SYS_SEEK called\n");
       seek (*(int*)(sp + 4), *(unsigned*)(sp + 8));
       break;
       
     case SYS_TELL:
       check_user_vaddr (sp + 4);
+      printf("[DEBUG] SYS_TELL called\n");
       f->eax = tell (*(int*)(sp + 4));
       break;
       
     case SYS_CLOSE:
       check_user_vaddr (sp + 4);
+      printf("[DEBUG] SYS_CLOSE called\n");
       close (*(int*)(sp + 4));
       break;
       
     default:
+      printf("[DEBUG] Unknown syscall: %d\n", syscall_num);
       exit (-1);
       break;
   }
+  printf("[DEBUG] syscall_handler finished for syscall %d\n", syscall_num);
 }
 
 static void
