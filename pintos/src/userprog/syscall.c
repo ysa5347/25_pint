@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -19,8 +20,8 @@ static struct file *get_file (int fd);
 /* System call functions */
 static void halt (void);
 static void exit (int status);
-static pid_t exec (const char *cmd_line);
-static int wait (pid_t pid);
+static int exec (const char *cmd_line);
+static int wait (int pid);
 static bool create (const char *file, unsigned initial_size);
 static bool remove (const char *file);
 static int open (const char *file);
@@ -67,7 +68,7 @@ syscall_handler (struct intr_frame *f)
       
     case SYS_WAIT:
       check_user_vaddr (sp + 4);
-      f->eax = wait (*(pid_t*)(sp + 4));
+      f->eax = wait (*(int*)(sp + 4));
       break;
       
     case SYS_CREATE:
@@ -164,7 +165,7 @@ exit (int status)
   thread_exit ();
 }
 
-static pid_t
+static int
 exec (const char *cmd_line)
 {
   if (cmd_line == NULL)
@@ -173,7 +174,7 @@ exec (const char *cmd_line)
 }
 
 static int
-wait (pid_t pid)
+wait (int pid)
 {
   return process_wait (pid);
 }
